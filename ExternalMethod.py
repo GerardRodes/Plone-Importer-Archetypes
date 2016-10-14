@@ -5,11 +5,11 @@ def importContent(self):
 
   contentStructure = [
     {'contenttype': 'MyContentType'},
-    {'title': 'Content {numcontent}'},
-    {'field': 'legislatura',  'type': 'String'},
-    {'field': 'seriecontent', 'type': 'String',   'attr': 'serie_content'},
-    {'field': 'aniocontent',  'type': 'String',   'attr': 'fecha_content',  'filter': lambda fecha, item: fecha[:4]},
-    {'field': 'fechacontent', 'type': 'DateTime', 'attr': 'fecha_content', 'format': '%Y-%m-%d'},
+    {'title': 'Content {field3}'},
+    {'field': 'field1',  'type': 'String'},
+    {'field': 'field2', 'type': 'String',   'attr': 'serie_content'},
+    {'field': 'field3',  'type': 'String',   'attr': 'fecha_content',  'filter': lambda fecha, item: fecha[:4]},
+    {'field': 'field4', 'type': 'DateTime', 'attr': 'fecha_content', 'format': '%Y-%m-%d'},
     {'field': 'file',         'type': 'File',     'attr': 'content',  'urlBuilder': lambda fileName, item: 'http://www.someurl.org/files/'+item['id']['text']+'/'+fileName }
   ]
 
