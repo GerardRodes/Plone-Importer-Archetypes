@@ -34,6 +34,7 @@ import time
 from DateTime import DateTime
 from datetime import date, datetime
 import transaction
+from Products.CMFPlone.utils import safe_unicode
 
 class Importer:
 
@@ -160,7 +161,7 @@ class Importer:
             newTitle['string'] = newTitle['string'].replace('{'+part+'}',item[attrName]['text'])
         self.addEvent('Building object: '+newTitle['string'])
 
-        newId = plone_utils.normalizeString(newTitle['string'])
+        newId = plone_utils.normalizeString(safe_unicode(newTitle['string']))
         if getattr(targetFolder, newId, None):
           if not self.ignoreIfExists:
             newId += '-'+str(int(round(time.time() * 1000)))
@@ -211,6 +212,10 @@ class Importer:
 
       except Exception as e:
         self.addEvent('ERROR: '+str(e))
+        if getattr(targetFolder, newId, None):
+          self.addEvent('DELETING OBJECT: '+str(newId))
+          targetFolder.manage_delObjects([newId])
+
         self.log['stats']['failed'] += 1
 
       self.addEvent('--- ITEM '+str(i+1)+'/'+str(self.log['stats']['total'])+' END ---')
