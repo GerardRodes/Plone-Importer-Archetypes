@@ -14,6 +14,7 @@
 # ATTRIBUTES ON STRUCTURE
 #   -contenttype: Specifies Plone ContentType
 #   -title:       Title of the content, it can have replacements from the item itself that have to be specified with '{ANY_ATTRIBUTE}', example: {'title': 'Boletin {numboletin}'}
+#   -id:          String to set the id of the content, if not defined title will be used instead.
 #   -field:       Name of the field at Plone ContentType Schema
 #   -type:        Type of the field (String, DateTime, ...)
 #   -attr:        Name of the tag at the item on the XML (if not provided field will be used as default)
@@ -161,7 +162,23 @@ class Importer:
             newTitle['string'] = newTitle['string'].replace('{'+part+'}',item[attrName]['text'])
         self.addEvent('Building object: '+newTitle['string'])
 
-        newId = plone_utils.normalizeString(safe_unicode(newTitle['string']))
+
+        idStructure = {'structure': filter(lambda info: info.get('id', None), self.structure)}
+        newId = ''
+        
+        if idStructure['structure']:
+          idStructure['string'] = idStructure['structure'][0]['id']
+          idParts = re.compile('(?<=\{)(.*?)(?=\})').split(idStructure['structure'][0]['id'])
+          idParts = filter(lambda part: '{' not in part and '}' not in part, idParts)
+          for part in idParts:
+            attrName = filter(lambda field: field.get('field', None) == part, self.structure)[0]['attr']
+            idStructure['string'] = idStructure['string'].replace('{'+part+'}',item[attrName]['text'])
+
+          newId = plone_utils.normalizeString(safe_unicode(idStructure['string']))
+        else:
+          newId = plone_utils.normalizeString(safe_unicode(newTitle['string']))
+
+
         if getattr(targetFolder, newId, None):
           if not self.ignoreIfExists:
             newId += '-'+str(int(round(time.time() * 1000)))
@@ -240,13 +257,13 @@ class Importer:
 
   def downloadFile(self, field, value, item, newObject):
     url = field['urlBuilder'](value, item)
-    self.addEvent('Downloading file: '+value)
+    self.addEvent('Downloading file '+value+' from '+str(url))
     try:
       file = urllib.urlopen(url)
       if file.getcode() == 404:
         raise Exception(file.getcode())
 
-      self.addEvent('Reading file: '+str(url))
+      self.addEvent('Reading file...')
       fileData = file.read()
       file.close()
       self.addEvent('File readed, size: '+str(len(fileData)))
