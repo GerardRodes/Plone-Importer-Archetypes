@@ -1,7 +1,7 @@
 # Plone-Importer
 Automating XML imports to Plone Objects Schemata
 
-##PARAMETERS  
+## PARAMETERS  
 - plonePortal:       instance of plone portal  
 - targetFolderPath:  string, path where objects will be createds  
 - xmlPath:           string, path where the xml to read is located  
@@ -11,7 +11,7 @@ Automating XML imports to Plone Objects Schemata
 - ignoreIfExists:    boolean, if is set to true, content with existing IDs on Plone portal won't be created  
 - maxRetries:        int, number of retries for failed downloads  
 
-##ATTRIBUTES ON STRUCTURE
+## ATTRIBUTES ON STRUCTURE
 - contenttype: Specifies Plone ContentType  
 - title:       Title of the content, it can have replacements from the item itself that have to be specified with '{ANY_ATTRIBUTE}', example: {'title': 'Boletin {numboletin}'}  
 - field:       Name of the field at Plone ContentType Schema  
@@ -21,7 +21,7 @@ Automating XML imports to Plone Objects Schemata
 - format:      [DateTime Only] Specifies the format that will have the date string, example: '%Y-%m-%d'  
 - urlBuilder:  [File Only] Function to build the url where the file will be downloaded, field value and item dictionary are passed as parameters  
 
-##SUPPORTED FIELD TYPES ON STRUCTURE:
+## SUPPORTED FIELD TYPES ON STRUCTURE:
 - String  
 - DateTime  
 - File
