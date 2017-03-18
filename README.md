@@ -21,7 +21,7 @@ Automating XML imports to Plone Objects Schemata
 - format:      [DateTime Only] Specifies the format that will have the date string, example: '%Y-%m-%d'  
 - urlBuilder:  [File Only] Function to build the url where the file will be downloaded, field value and item dictionary are passed as parameters  
 
-## SUPPORTED FIELD TYPES ON STRUCTURE:
+## SUPPORTED FIELD TYPES ON STRUCTURE
 - String  
 - DateTime  
 - File
