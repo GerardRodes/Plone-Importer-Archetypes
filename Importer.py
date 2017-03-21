@@ -44,7 +44,7 @@ API_KEY = "AIzaSyAopezY7RwnGO4X4xds7IV0xvBc5dp5JAg"
 
 class Importer:
 
-  def __init__(self, plonePortal = None, targetFolderPath = None, xmlPath = None, attrName = None, items = None, structure = None, ignoreIfExists = False, retryDownloads = True, maxRetries = 5):
+  def __init__(self, plonePortal = None, targetFolderPath = None, xmlPath = None, attrName = None, items = None, structure = None, ignoreIfExists = False, updateIfExists = True, retryDownloads = True, maxRetries = 5):
     self.portal           = plonePortal
     self.targetFolderPath = targetFolderPath
     self.xmlPath          = xmlPath
@@ -52,6 +52,7 @@ class Importer:
     self.items            = items
     self.structure        = structure
     self.ignoreIfExists   = ignoreIfExists
+    self.updateIfExists   = updateIfExists
     self.retryDownloads   = retryDownloads
     self.maxRetries       = 5
     self.log              = {
@@ -61,6 +62,7 @@ class Importer:
                                 'ignored': 0,
                                 'failed': 0,
                                 'exists': 0,
+                                'updated': 0,
                                 'fileDownloadsSuccess': 0,
                                 'fileDownloadsError': 0,
                               },
@@ -185,8 +187,12 @@ class Importer:
         else:
           newId = plone_utils.normalizeString(safe_unicode(newTitle['string']))
 
-
+        newObject = None
         if getattr(targetFolder, newId, None):
+          if self.updateIfExists:
+            self.log['stats']['updated'] += 1
+            self.addEvent(newId+' already exists, updating')
+            newObject = getattr(targetFolder, str(newId))
           if not self.ignoreIfExists:
             newId += '-'+str(int(round(time.time() * 1000)))
             self.log['stats']['exists'] += 1
@@ -196,10 +202,11 @@ class Importer:
             continue
         self.addEvent('Generated id: '+newId)
 
-        contenttype = filter(lambda info: info.get('contenttype', None), self.structure)[0]['contenttype']
-        targetFolder.invokeFactory(contenttype, str(newId))
-        newObject = getattr(targetFolder, str(newId))
-        self.addEvent('ContentType: '+contenttype)
+        if not newObject:
+          contenttype = filter(lambda info: info.get('contenttype', None), self.structure)[0]['contenttype']
+          targetFolder.invokeFactory(contenttype, str(newId))
+          newObject = getattr(targetFolder, str(newId))
+          self.addEvent('ContentType: '+contenttype)
 
         newObject.setTitle(newTitle['string'])
 
@@ -207,34 +214,37 @@ class Importer:
 
         for field in fields:
           fieldValue = None
-          value = item[field['attr']]['text']
+          value = item[field['attr']].get('text', None)
+          if value:
+            setter = getattr(newObject, 'set' + field['field'][0].capitalize() + field['field'][1:])
 
-          if field['type'] == 'String':
-            fieldValue = value
-            setter = getattr(newObject, 'set'+field['field'].capitalize())
-            setter(fieldValue)
+            if field['type'] == 'String':
+              fieldValue = value
+              setter(fieldValue)
 
-          elif field['type'] == 'DateTime':
-            fieldValue = DateTime(datetime.strptime(value,field['format']))
-            setter = getattr(newObject, 'set'+field['field'].capitalize())
-            setter(fieldValue)
+            elif field['type'] == 'DateTime':
+              fieldValue = DateTime(datetime.strptime(value,field['format']))
+              setter(fieldValue)
 
-          elif field['type'] == 'File':
-            self.downloadFile(field, value, item, newObject)
+            elif field['type'] == 'File':
+              self.downloadFile(field, value, item, newObject)
 
-          elif field['type'] == 'Address':
-            fieldValue = self.getCoordinates(value)
-            getattr(newObject, 'set'+field['field'].capitalize())( str(fieldValue['lat']) + '|' + str(fieldValue['lng']) )
+            elif field['type'] == 'Address':
+              fieldValue = self.getCoordinates(value)
+              setter( str(fieldValue['lat']) + '|' + str(fieldValue['lng']) )
 
 
-          filterFunc = field.get('filter',None)
-          if filterFunc:
-            self.addEvent('Applying filter '+str(filterFunc))
-            fieldValue = filterFunc(fieldValue, item)
-          
-          self.addEvent('Populated '+field['type']+' field '+field['field'])
+            filterFunc = field.get('filter',None)
+            if filterFunc:
+              self.addEvent('Applying filter '+str(filterFunc))
+              fieldValue = filterFunc(fieldValue, item)
+            
+            self.addEvent('Populated '+field['type']+' field '+field['field'])
+          else:
+            self.addEvent('Field ' + field['field'] + ' empty value')
 
-        workflowTool.doActionFor(newObject,'publish',comment="published programmatically")
+
+        workflowTool.doActionFor(newObject, 'publish', comment="published programmatically")
         newObject.reindexObject()
         transaction.commit()
         self.log['stats']['success'] += 1
