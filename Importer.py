@@ -24,7 +24,7 @@
 #
 #
 # SUPPORTED FIELD TYPES ON STRUCTURE:
-#   String, DateTime, File
+#   String, DateTime, File, Address
 
 import urllib
 import os
@@ -36,6 +36,11 @@ from DateTime import DateTime
 from datetime import date, datetime
 import transaction
 from Products.CMFPlone.utils import safe_unicode
+import json
+import urllib2
+import sys
+
+API_KEY = "AIzaSyAopezY7RwnGO4X4xds7IV0xvBc5dp5JAg"
 
 class Importer:
 
@@ -132,11 +137,13 @@ class Importer:
     else:
       return element
 
+
   def findAllItems(self, json = None, ParamAttrName = None):
     attrName = ParamAttrName if ParamAttrName is not None else self.attrName
     self.items = []
     for item in self.tree.getroot().findall(attrName):
       self.items.append(self.parseXml(item, isRoot = False))
+
 
   def buildObjects(self):
 
@@ -147,6 +154,7 @@ class Importer:
 
     for i, item in enumerate(self.items):
       self.addEvent('--- ITEM '+str(i+1)+'/'+str(self.log['stats']['total'])+' START ---')
+      newId = ''
       try:
         newObject = None
 
@@ -164,7 +172,6 @@ class Importer:
 
 
         idStructure = {'structure': filter(lambda info: info.get('id', None), self.structure)}
-        newId = ''
         
         if idStructure['structure']:
           idStructure['string'] = idStructure['structure'][0]['id']
@@ -202,18 +209,23 @@ class Importer:
           fieldValue = None
           value = item[field['attr']]['text']
 
-          if field['type'] is 'String':
+          if field['type'] == 'String':
             fieldValue = value
             setter = getattr(newObject, 'set'+field['field'].capitalize())
             setter(fieldValue)
 
-          elif field['type'] is 'DateTime':
+          elif field['type'] == 'DateTime':
             fieldValue = DateTime(datetime.strptime(value,field['format']))
             setter = getattr(newObject, 'set'+field['field'].capitalize())
             setter(fieldValue)
 
-          elif field['type'] is 'File':
+          elif field['type'] == 'File':
             self.downloadFile(field, value, item, newObject)
+
+          elif field['type'] == 'Address':
+            fieldValue = self.getCoordinates(value)
+            getattr(newObject, 'set'+field['field'].capitalize())( str(fieldValue['lat']) + '|' + str(fieldValue['lng']) )
+
 
           filterFunc = field.get('filter',None)
           if filterFunc:
@@ -228,7 +240,10 @@ class Importer:
         self.log['stats']['success'] += 1
 
       except Exception as e:
-        self.addEvent('ERROR: '+str(e))
+        exc_type, exc_obj, exc_tb = sys.exc_info()
+        fname = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
+        print(exc_type, fname, exc_tb.tb_lineno)
+        self.addEvent('ERROR: ' + str(e) + ' \n line:' + str(exc_tb.tb_lineno))
         if getattr(targetFolder, newId, None):
           self.addEvent('DELETING OBJECT: '+str(newId))
           targetFolder.manage_delObjects([newId])
@@ -249,11 +264,11 @@ class Importer:
     if len(self.log['failedDownloads']) > 0:
       self.log['failedDownloads'] = map(lambda fD: {'id':fD['object'].getId() ,'url':fD['field']['urlBuilder'](fD['value'], fD['item'])}, self.log['failedDownloads'])
 
-          
 
   def addEvent(self, event):
     print event
     self.log['events'].append(event)
+
 
   def downloadFile(self, field, value, item, newObject):
     url = field['urlBuilder'](value, item)
@@ -274,3 +289,16 @@ class Importer:
       self.log['stats']['fileDownloadsError'] += 1
       self.log['failedDownloads'].append({'field': field, 'value': value, 'item': item, 'object': newObject})
       self.addEvent('ERROR: download failed from: '+url+' - '+str(e))
+
+
+  def getCoordinates(self, address):
+    url = "https://maps.googleapis.com/maps/api/geocode/json?address=" + urllib.quote_plus(address.encode('utf-8')) + "&key=" + API_KEY
+    resp = json.load(urllib2.urlopen(url))
+
+    try:
+      return resp['results'][0]['geometry']['location']
+    except:
+      return {
+        "lat" : 0,
+        "lng" : 0
+      }
