@@ -25,3 +25,4 @@ Automating XML imports to Plone Objects Schemata
 - String  
 - DateTime  
 - File
+- Google Maps string Address
