@@ -42,9 +42,10 @@ import sys
 
 API_KEY = "AIzaSyAopezY7RwnGO4X4xds7IV0xvBc5dp5JAg"
 
+
 class Importer:
 
-  def __init__(self, plonePortal = None, targetFolderPath = None, xmlPath = None, attrName = None, items = None, structure = None, ignoreIfExists = False, updateIfExists = True, retryDownloads = True, maxRetries = 5):
+  def __init__(self, publish = True, plonePortal = None, targetFolderPath = None, xmlPath = None, attrName = None, items = None, structure = None, ignoreIfExists = False, updateIfExists = True, retryDownloads = True, maxRetries = 5):
     self.portal           = plonePortal
     self.targetFolderPath = targetFolderPath
     self.xmlPath          = xmlPath
@@ -55,6 +56,7 @@ class Importer:
     self.updateIfExists   = updateIfExists
     self.retryDownloads   = retryDownloads
     self.maxRetries       = 5
+    self.publish          = publish
     self.log              = {
                               'stats':{
                                 'total': 0,
@@ -193,7 +195,7 @@ class Importer:
             self.log['stats']['updated'] += 1
             self.addEvent(newId+' already exists, updating')
             newObject = getattr(targetFolder, str(newId))
-          if not self.ignoreIfExists:
+          elif not self.ignoreIfExists:
             newId += '-'+str(int(round(time.time() * 1000)))
             self.log['stats']['exists'] += 1
           else:
@@ -212,41 +214,56 @@ class Importer:
 
         fields = filter(lambda info: info.get('field', None), self.structure)
 
+        ##############
+        # Decides if publish or not the content
+        ##############
+        publish_definition = [info for info in self.structure if info.get('publish_if', None)]
+
         for field in fields:
           fieldValue = None
           value = item[field['attr']].get('text', None)
-          if value:
+          if value != None:
             setter = getattr(newObject, 'set' + field['field'][0].capitalize() + field['field'][1:])
 
             if field['type'] == 'String':
               fieldValue = value
-              setter(fieldValue)
 
             elif field['type'] == 'DateTime':
               fieldValue = DateTime(datetime.strptime(value,field['format']))
-              setter(fieldValue)
 
             elif field['type'] == 'File':
               self.downloadFile(field, value, item, newObject)
 
             elif field['type'] == 'Address':
               fieldValue = self.getCoordinates(value)
-              setter( str(fieldValue['lat']) + '|' + str(fieldValue['lng']) )
+              fieldValue = str(fieldValue['lat']) + '|' + str(fieldValue['lng'])
 
 
-            filterFunc = field.get('filter',None)
-            if filterFunc:
-              self.addEvent('Applying filter '+str(filterFunc))
-              fieldValue = filterFunc(fieldValue, item)
+            if field['type'] != 'File':
+              filterFunc = field.get('filter', None)
+              if filterFunc:
+                self.addEvent('Applying filter '+str(filterFunc))
+                fieldValue = filterFunc(fieldValue, item)
+
+              setter(fieldValue)
             
             self.addEvent('Populated '+field['type']+' field '+field['field'])
           else:
             self.addEvent('Field ' + field['field'] + ' empty value')
 
 
-        workflowTool.doActionFor(newObject, 'publish', comment="published programmatically")
+        if publish_definition:
+          self.publish = publish_definition[0]['publish_if'](item, newObject)
+
+        if self.publish:
+          try:
+            self.addEvent('Trying to publish object...')
+            workflowTool.doActionFor(newObject, 'publish', comment="published programmatically")
+            self.addEvent('Success')
+          except Exception as e:
+            self.addEvent('Failed: ' + str(e))
+
         newObject.reindexObject()
-        transaction.commit()
         self.log['stats']['success'] += 1
 
       except Exception as e:
@@ -260,7 +277,15 @@ class Importer:
 
         self.log['stats']['failed'] += 1
 
+
+      if i % 50 == 0:
+        self.addEvent('commit')
+        transaction.commit()
+
       self.addEvent('--- ITEM '+str(i+1)+'/'+str(self.log['stats']['total'])+' END ---')
+
+    self.addEvent('final commit')
+    transaction.commit()
 
     if self.log['stats']['fileDownloadsError'] > 0:
       for attempt in range(self.maxRetries):
@@ -292,7 +317,7 @@ class Importer:
       fileData = file.read()
       file.close()
       self.addEvent('File readed, size: '+str(len(fileData)))
-      setter = getattr(newObject, 'set'+field['field'].capitalize())
+      setter = getattr(newObject, 'set' + field['field'][0].capitalize() + field['field'][1:])
       setter(fileData, filename=value.encode("utf-8"))
       self.log['stats']['fileDownloadsSuccess'] += 1
     except Exception as e:
