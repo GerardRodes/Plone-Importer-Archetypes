@@ -97,8 +97,12 @@ class Importer:
   ##parses xml as json at .json and as tree at .tree
   def setXml(self, xmlPath = None):
     xml  = xmlPath if xmlPath is not None else self.xmlPath
+    self.addEvent('Reading xml...')
     self.tree = ET.parse(xml)
+    self.addEvent('xml loaded')
+    self.addEvent('Parsing xml...')
     self.json = self.parseXml(self.tree.getroot())
+    self.addEvent('xml parsed to json')
 
   def setFolder(self, folderPath = None):
     path = self.targetFolderPath if folderPath is None else folderPath
@@ -232,7 +236,12 @@ class Importer:
               fieldValue = DateTime(datetime.strptime(value,field['format']))
 
             elif field['type'] == 'File':
-              self.downloadFile(field, value, item, newObject)
+              try:
+                self.addEvent('Trying to download file: ' + str(value))
+                self.downloadFile(field, value, item, newObject)
+              except:
+                self.addEvent('Error downloading file.')
+                pass
 
             elif field['type'] == 'Address':
               fieldValue = self.getCoordinates(value)
